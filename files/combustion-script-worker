@@ -70,7 +70,6 @@ INSTALL_K3S_UPSTREAM=true  ## Set to false if you want to use the openSUSE rpm, 
 MASTER_NODE_ADDR=$MIP ## The ip or FQDN of the first node
 MASTER_NODE_K3S_TOKEN=$tokenHA  ## You can find this on the master/CP node: /var/lib/rancher/k3s/server/node-token
 NODE_HOSTNAME=$hostname_Node  ## If you want to add additional nodes to a cluster you must set the hostname or nodes will not be able to join
-#INSTALL_K3S_EXEC='server --cluster-init --write-kubeconfig-mode=644 --token=K103bb0918382d9e04070c1497aacd1496add1bdbbbaa70b97882d290fd3c6638c9::server:6b222492093cd174bf075fc09f9861ed'
 
 ## Set hostname
 echo $NODE_HOSTNAME > /etc/hostname
