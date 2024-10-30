@@ -1,0 +1,150 @@
+#!/bin/bash
+
+#set -e
+
+# Firt parameter IP, Second Hostname, Token cluster Join
+
+host_IP=RIP
+hostname_Node=Rhost
+tokenHA=Rtoken
+masterIP=Rmaster
+
+## Note:
+## To check if the k3s installation has been finished
+## issue the "systemctl status k3sinstall.service" command.
+## To finish the installation you must reboot!
+## Once booted you can check the node with:
+## "kubectl get nodes"
+## For more check out:
+## "https://documentation.suse.com/trd/kubernetes/pdf/kubernetes_ri_k3s-slemicro_color_en.pdf"
+
+## Enable network
+# combustion: network prepare
+set -euxo pipefail
+
+nm_config() {
+umask 077 # Required for NM config
+mkdir -p /etc/NetworkManager/system-connections/
+mkdir -p /etc/NetworkManager/conf.d
+
+cat > "/etc/NetworkManager/system-connections/Wired connection 1.nmconnection" <<-EOF
+[connection]
+id=ens18
+type=ethernet
+interface-name=ens18
+
+[ethernet]
+
+[ipv4]
+address1=$host_IP/24,172.16.2.1
+dns=8.8.8.8;
+method=manual
+
+[ipv6]
+addr-gen-mode=default
+method=auto
+
+[proxy]
+EOF
+
+}
+
+if [ "${1-}" = "--prepare" ]; then
+nm_config # Configure NM in the initrd
+exit 0
+fi
+## Post output on stdout
+exec > >(exec tee -a /dev/tty0) 2>&1
+
+nm_config
+## Add password for root user
+## SUSE documentation recommends openssl passwd -6, mkpasswd --method=sha-512 works as well
+## The default password that is set here is: linux
+ROOT_USER_PASSWORD='$6$NWOL.CUVsuDtWZhb$rs8JeaNfx/ZL.OvQPYugAbXAUA67va.geqLa96zNo8no/PqxvFDICB.Gb2BFlIZoTx095qHSkRevKIyy1/AKj.'
+SSH_ROOT_PUBLIC_KEY='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDOtOjUwl7hCeYKIXfZ2s9FuNBhawqcum7Imh5bE4hhKTg1078UZZM94XniROMv4NtL6lEU4rjTdqJDeacpBF1nKGUyld8eAkTYhd7H4q6zGK/QVtWKYWGahihlSskCPG5rVT1novqa1KDFhUl9ldOT0V3zeaI4VGCHJ8EvB9R2xdom+HqnSeEpUx6L0t5jDivnajrOywsciyhMKJ3eXTEcNCUZc/u97IHhjWEP/WtX6/P7Ps9q9BJTTEEoP/nt55xmXlW4SFkiVa3RtlwvTSUxoj/FmvFRqz/X7Z8qp10MnUvihcOb5odda/k5Lj0YhJh6cDGiEBkDoblybJPnRXYDx/YKA6k5qXXq4ceRKh2LYEus9XfMYzjbDm6S7w7tHnbTNuY+6+BsNesXD0t96kQF9dg5L9k6o+YI9TJRFpFlcbB8852cNL1QIzPkyS8nGanPyC2uU/qsV9IUBiqLyVkM2ZaHm58EMvdVL0m0ErvE44gN0SYjs+SMprYUos/jKIs= root@localhost.localdomain'
+SSH_USER_PUBLIC_KEY='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDOtOjUwl7hCeYKIXfZ2s9FuNBhawqcum7Imh5bE4hhKTg1078UZZM94XniROMv4NtL6lEU4rjTdqJDeacpBF1nKGUyld8eAkTYhd7H4q6zGK/QVtWKYWGahihlSskCPG5rVT1novqa1KDFhUl9ldOT0V3zeaI4VGCHJ8EvB9R2xdom+HqnSeEpUx6L0t5jDivnajrOywsciyhMKJ3eXTEcNCUZc/u97IHhjWEP/WtX6/P7Ps9q9BJTTEEoP/nt55xmXlW4SFkiVa3RtlwvTSUxoj/FmvFRqz/X7Z8qp10MnUvihcOb5odda/k5Lj0YhJh6cDGiEBkDoblybJPnRXYDx/YKA6k5qXXq4ceRKh2LYEus9XfMYzjbDm6S7w7tHnbTNuY+6+BsNesXD0t96kQF9dg5L9k6o+YI9TJRFpFlcbB8852cNL1QIzPkyS8nGanPyC2uU/qsV9IUBiqLyVkM2ZaHm58EMvdVL0m0ErvE44gN0SYjs+SMprYUos/jKIs= root@localhost.localdomain'
+USER_REQUIRED_PACKAGES='patterns-microos-cockpit cockpit bash-completion htop jq open-iscsi nfs-client'
+CREATE_NORMAL_USER=omarv ## Add the username here to create a user, leave empty to skip creating one
+NORMAL_USER_PASSWORD='$6$NWOL.CUVsuDtWZhb$rs8JeaNfx/ZL.OvQPYugAbXAUA67va.geqLa96zNo8no/PqxvFDICB.Gb2BFlIZoTx095qHSkRevKIyy1/AKj.'
+NODE_HOSTNAME=$hostname_Node  ## If you want to add additional nodes to a cluster you must set the hostname or nodes will not be able to join
+## K3s configuration
+INSTALL_K3S_UPSTREAM=true  ## Set to false if you want to use the openSUSE rpm, also add the package name to USER_REQUIRED_PACKAGES
+MASTER_NODE_ADDR=$masterIP  ## The ip or FQDN of the first node
+MASTER_NODE_K3S_TOKEN=$tokenHA  ## You can find this on the master/CP node: /var/lib/rancher/k3s/server/node-token
+INSTALL_K3S_EXEC='server'
+NODE_HOSTNAME=$hostname_Node  ## If you want to add additional nodes to a cluster you must set the hostname or nodes will not be able to join
+ 
+## Set hostname
+echo $NODE_HOSTNAME > /etc/hostname
+ 
+## Mount /var and /home so user can be created smoothly
+if [ "$CREATE_NORMAL_USER" ]
+then
+    mount /var && mount /home
+fi
+ 
+## Set root password
+echo root:$ROOT_USER_PASSWORD | chpasswd -e
+## Add ssh public key as authorized key for the root user
+mkdir -pm700 /root/.ssh/
+echo $SSH_ROOT_PUBLIC_KEY >> /root/.ssh/authorized_keys
+ 
+## User creation
+if [ "$CREATE_NORMAL_USER" ]
+then
+    echo "User creation is requested, creating user."
+    useradd -m $CREATE_NORMAL_USER -s /bin/bash -g users
+    echo $CREATE_NORMAL_USER:$NORMAL_USER_PASSWORD | chpasswd -e
+    echo $CREATE_NORMAL_USER "ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/adminusers
+    mkdir -pm700 /home/$CREATE_NORMAL_USER/.ssh/
+    chown -R $CREATE_NORMAL_USER:users /home/$CREATE_NORMAL_USER/.ssh/
+    echo $SSH_USER_PUBLIC_KEY >> /home/$CREATE_NORMAL_USER/.ssh/authorized_keys
+    echo "Requested user has been created, requested password has been set."
+  else
+    echo "No user will be created"
+fi
+ 
+## Install required packages
+if [ "$USER_REQUIRED_PACKAGES" ]
+then
+    zypper ref && zypper --non-interactive install $USER_REQUIRED_PACKAGES
+fi
+ 
+if $INSTALL_K3S_UPSTREAM; then
+    ## Download and install the latest k3s installer
+    curl -L --output k3s_installer.sh https://get.k3s.io && install -m755 k3s_installer.sh /usr/bin/
+    ## Create a systemd unit that installs k3s if not installed yet
+    cat <<- EOF > /etc/systemd/system/install-rancher-k3s-master.service
+    [Unit]
+    Description=Run K3s installer
+    Wants=network-online.target
+    After=network.target network-online.target
+    ConditionPathExists=/usr/bin/k3s_installer.sh
+    ConditionPathExists=!/usr/local/bin/k3s
+    [Service]
+    Type=forking
+    TimeoutStartSec=120
+    Environment="K3S_URL=https://$MASTER_NODE_ADDR:6443"
+    Environment="K3S_TOKEN=$MASTER_NODE_K3S_TOKEN"
+    Environment="K3S_KUBECONFIG_MODE=644"
+    Environment="INSTALL_K3S_EXEC=$INSTALL_K3S_EXEC"
+    ExecStart=/usr/bin/k3s_installer.sh
+    RemainAfterExit=yes
+    KillMode=process
+    [Install]
+    WantedBy=multi-user.target
+EOF
+fi
+ 
+## Enable services
+systemctl enable cockpit.socket
+systemctl enable sshd
+systemctl enable install-rancher-k3s-master.service
+ 
+## Unmount var and home
+if [ "$CREATE_NORMAL_USER" ]
+then
+    umount /var && umount /home
+fi
+
+echo "Configured with Combustion" > /etc/issue.d/combustion

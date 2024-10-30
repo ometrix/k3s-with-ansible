@@ -1,0 +1,274 @@
+- name: Create k3s
+  hosts: pve
+  gather_facts: false
+  vars_files:
+    - var_ansible
+
+  tasks:
+  - name: Copy file with owner and permissions
+    ansible.builtin.copy:
+      src: "{{ item }}"
+      dest: /var/
+      owner: root
+      group: root
+      mode: '0744'
+    with_fileglob:
+      - /home/ansible/MicroAnsible/files/*
+
+  - name: Create k3s HA1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}1" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ HAk3sHost }}1"
+      timeout: 300
+      state: present
+
+  - name: Create k3s HA2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}2" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ HAk3sHost }}2"
+      timeout: 300
+      state: present
+
+  - name: Create k3s worker1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}3" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ workerk3s }}1"
+      timeout: 300
+      state: present
+
+  - name: Create k3s worker2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}4" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ workerk3s }}2"
+      timeout: 300
+      state: present
+
+  - name: Create k3s worker3
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}5" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ workerk3s }}3"
+      timeout: 300
+      state: present
+  
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 45
+
+  - name: Update k3s HA1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"  # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-master
+      update: true
+
+  - name: Update k3s HA2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}2"  # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-ha1
+      update: true
+
+  - name: Update Worker1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}1" # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-worker1
+      update: true
+
+  - name: Update Worker2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}2" # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-worker2
+      update: true
+   
+  - name: Update Worker3
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}3" # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-worker3
+      update: true
+   
+  - name: Start master1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"
+      node: pve
+      state: started
+  
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 400
+
+  - name: Restart Master
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"
+      node: pve
+      timeout: 300
+      state: restarted
+
+   
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 100
+
+  - name: Start master2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}2"
+      node: pve
+      state: started
+
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 400
+
+  - name: Restart master2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}2"
+      timeout: 300
+      node: pve
+      state: restarted
+
+  - name: Start the node1
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}1"
+      node: pve
+      state: started
+
+  - name: Start the node2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}2"
+      node: pve
+      state: started
+        
+  - name: Start the node3
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}3"
+      node: pve
+      state: started
+        
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 200
+
+  - name: Restart Nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}{{ item }}"
+      node: pve
+      timeout: 300
+      state: restarted
+    loop: 
+      - 1
+      - 2
+      - 3

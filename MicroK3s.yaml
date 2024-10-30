@@ -1,0 +1,199 @@
+- name: Create k3s
+  hosts: pve
+  gather_facts: false
+  vars_files:
+    - var_ansible
+
+  tasks:
+  - name: Copy file with owner and permissions
+    ansible.builtin.copy:
+      src: "{{ item }}"
+      dest: /var/
+      owner: root
+      group: root
+      mode: '0744'
+    with_fileglob:
+      - /home/ansible/MicroAnsible/files/*
+
+  - name: Create k3s MASTER
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid }}0" # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ HAk3sHost }}1"
+      timeout: 300
+      state: present
+
+  # Loop for HA nodes
+  - name: Create HA k3s nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid + item }}"  # Dynamic newid for HA nodes
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ HAk3sHost }}{{ item }}"  # Dynamic name for HA nodes
+      timeout: 300
+      state: present
+    loop: "{{ range(2, tha+1) | list }}"  # Loop tha times for HA nodes
+
+  # Loop for worker nodes
+  - name: Create k3s worker nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: "{{ vmid + tha + item }}"  # Dynamic newid for worker nodes
+      node: "pve"
+      storage: local
+      format: raw
+      name: "{{ workerk3s }}{{ item }}"  # Dynamic name for worker nodes
+      timeout: 300
+      state: present
+    loop: "{{ range(1, twk+1) | list }}"  # Loop tmv times for worker nodes
+
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 45
+
+  # Loop for updating HA nodes
+
+  - name: Update k3s MASTER
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      #api_token_id: "root-ansible"
+      #api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"  # ID for the new VM
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-master
+      update: true
+
+  - name: Update HA k3s nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}{{ item }}"  # Dynamic name for HA nodes
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-ha{{ item }}
+      update: true
+    loop: "{{ range(2, tha+1) | list }}"  # Loop based on the number of HA nodes
+
+  # Loop for updating Worker nodes
+  - name: Update k3s worker nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_password: "S0p0rt31379"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}{{ item }}"  # Dynamic name for Worker nodes
+      node: "pve"
+      memory: 2048
+      cores: 2
+      args: -fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script-worker{{ item }}
+      update: true
+    loop: "{{ range(1, twk+1) | list }}"  # Loop based on the number of Worker nodes
+
+  - name: Start MASTER
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"
+      node: pve
+      state: started
+  
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 400
+
+  - name: Restart MASTER
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}1"
+      node: pve
+      timeout: 300
+      state: restarted
+
+   
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 100
+
+  - name: Start HA Nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}{{ item }}"
+      node: pve
+      state: started
+    loop: "{{ range(2, tha+1) | list }}"  # Loop based on the number of HA nodes
+
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 400
+
+  - name: Restart master2
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ HAk3sHost }}{{ item }}"
+      timeout: 300
+      node: pve
+      state: restarted
+    loop: "{{ range(2, tha+1) | list }}"  # Loop based on the number of HA nodes
+
+  - name: Start Worker Nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}{{ item }}"
+      node: pve
+      state: started
+    loop: "{{ range(1, twk+1) | list }}"  # Loop based on the number of Worker nodes
+
+  - name: Wait for machine to be ready
+    wait_for:
+      timeout: 200
+
+  - name: Restart Nodes
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      name: "{{ workerk3s }}{{ item }}"
+      node: pve
+      timeout: 300
+      state: restarted
+    loop: "{{ range(1, twk+1) | list }}"  # Loop based on the number of Worker nodes

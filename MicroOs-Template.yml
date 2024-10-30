@@ -1,0 +1,23 @@
+- name: Create a proxmox VM
+  hosts: pve
+  gather_facts: false
+
+  tasks:
+  - name: Create Proxmox VM
+    proxmox_kvm:
+      api_user: "root@pam"
+      api_token_id: "root-ansible"
+      api_token_secret: "4dc4e530-e6db-4533-a7d4-a9d5b59c5e46"
+      api_host: "192.168.0.151"
+      clone: MicroOsTemplate
+      vmid: 101
+      newid: 172162102 # ID for the new VM
+      node: "pve"
+      storage: local
+      format: raw
+      name: "k3s2"
+      net:
+        net0: 'virtio,bridge=vmbr0'
+      timeout: 300
+      args: "-fw_cfg name=opt/org.opensuse.combustion/script,file=/var/combustion-script"
+      state: present
