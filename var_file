@@ -1,6 +1,0 @@
-clusterNode=k3sm
-clusterNodeW=k3sw
-ips=172.16.2.10
-masterIP=172.16.2.101
-k3stoken=6b222492093cd174bf075fc09f9861ed
-vmid=17216210
